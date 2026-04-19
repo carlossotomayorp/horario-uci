@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Horario UCI - Nueva Esperanza</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- External Libraries -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+  
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <!-- AUTHENTICATION OVERLAY -->
+  <section id="auth-section">
+    <div class="glass-panel auth-card" style="margin-bottom: 1rem;">
+      <img src="logo.png" alt="Logo NEI" class="brand-logo" onerror="this.style.display='none'">
+      <h1>NUEVA ESPERANZA INTENSIVA</h1>
+      <p style="margin-bottom: 2rem;">Gestión Horarios UCI. San Juan de Dios.</p>
+
+      <!-- Paso 1: Selección Role -->
+      <div id="auth-step-1">
+        <button class="auth-btn medico" onclick="app.selectRoleStep('medico')">
+          Ingresar como Médico
+        </button>
+        <button class="auth-btn" onclick="app.selectRoleStep('admin')">
+          Ingresar como Admin
+        </button>
+      </div>
+
+      <!-- Paso 2: Input Contraseña -->
+      <div id="auth-step-2" style="display: none;">
+        <p id="lbl-selected-role" style="font-weight:600; color:var(--text-primary);"></p>
+        <div style="margin-bottom: 1.5rem; margin-top:1rem;">
+          <input type="password" id="auth-password" class="auth-input" placeholder="Introduce tu Clave Secreta" onkeypress="if(event.key === 'Enter') app.attemptLogin()">
+          <p id="auth-error" style="color: #ef4444; font-size: 0.85rem; margin-top: 0.5rem; display: none;">Clave incorrecta</p>
+        </div>
+        <div style="display: flex; gap: 1rem;">
+          <button class="logout-btn" style="flex: 1;" onclick="app.resetAuthStep()">Atrás</button>
+          <button class="auth-btn" style="flex: 2; margin-bottom: 0;" onclick="app.attemptLogin()">Acceder</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MAIN APP PORTAL -->
+  <main id="app-container" class="app-bg-watermark">
+    <!-- Fila superior universal: LOGOUT Prominente -->
+    <div style="display: flex; justify-content: flex-end; width: 100%; padding: 1rem 1rem 0 0;">
+      <button class="logout-btn huge-logout" onclick="app.logout()">🚪 Salir del Sistema</button>
+    </div>
+
+    <header class="header glass-panel" style="margin-top:0;">
+      <div style="display: flex; align-items: center;">
+        <img src="logo.png" alt="Logo" class="header-logo" onerror="this.style.display='none'">
+        <div>
+          <h1 style="font-size: 1.8rem; margin-bottom: 0;">Horario UCI</h1>
+
+          <!-- Notice only visible for admin -->
+          <p id="admin-reminder" style="color: var(--accent-cyan); font-size: 0.85rem; margin-top: 0.5rem; display: none;">
+            🔐 <b>Recordatorio:</b> La clave de acceso para Médicos es: <span style="letter-spacing: 1px; color:#fff;">sanjuan2026</span>
+          </p>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; align-items: flex-end;">
+        <div class="user-profile">
+          <div style="text-align: right;">
+             <!-- Ajuste solicitado: Sin subtítulos, solo el nombre directo -->
+            <span id="welcome-msg" style="font-weight: 600; font-size: 1.1rem; color: var(--accent-cyan);"></span>
+          </div>
+          <div class="avatar" id="user-avatar" style="margin-left: 1rem;">S</div>
+        </div>
+      </div>
+    </header>
+
+    <div class="day-picker-container glass-panel">
+      <!-- Generated via JS -->
+      <div id="day-picker" class="day-picker"></div>
+    </div>
+
+    <!-- EXPORTACIONES Y REPORTES COMUNES PARA TODOS -->
+    <div class="report-actions glass-panel" style="margin-bottom: 2rem; padding: 1rem; flex-wrap: wrap;">
+      <div style="display: flex; align-items: center; margin-right: auto; gap: 1rem;">
+        <h4 style="color: var(--text-secondary); margin: 0; font-weight: normal;">Seleccionar Mes:</h4>
+        <select id="month-selector" class="month-dropdown" onchange="app.switchMonth(this.value)">
+          <option value="">Sin horarios</option>
+        </select>
+      </div>
+
+      <div style="display: flex; gap: 1rem; align-items: center;">
+        <h4 style="color: var(--text-secondary); margin: 0; font-weight: normal;">Descargas (PDF):</h4>
+        <button class="pdf-btn" onclick="app.generateCalendar('uci')">📄 UCI</button>
+        <button class="pdf-btn" onclick="app.generateCalendar('uce')">📄 UCE</button>
+      </div>
+    </div>
+
+    <!-- Admin actions inline (Exclusivo Admins) -->
+    <div class="admin-actions" id="admin-tools" style="display: none; margin-bottom: 2rem; background: rgba(30, 41, 59, 0.4); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--accent-blue);">
+      <h3 style="margin-bottom: 1rem; color: var(--accent-cyan); font-size: 1.1rem;">🔧 Herramientas de Administración</h3>
+      <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+        <button class="auth-btn" style="max-width: 250px; padding: 0.5rem; margin-bottom:0;" onclick="document.getElementById('fileUpload').click()">+ Cargar / Reemplazar Excel</button>
+        <button class="pdf-btn attendance-btn" style="background:#eab308; border-color:#ca8a04; margin-left: auto;" onclick="app.generateAttendanceReport()">📊 Descargar Reporte de Asistencia (Mensual)</button>
+      </div>
+      <input type="file" id="fileUpload" style="display: none;" accept=".xlsx, .xls">
+    </div>
+
+    <!-- SCHEDULE CONTENT (2 Columns) -->
+    <div class="main-schedule-layout">
+      <!-- CUIDADOS INTENSIVOS -->
+      <div class="schedule-column uci-col">
+        <div class="col-header"><h2>Cuidados Intensivos</h2></div>
+        
+        <div class="shift-block">
+          <h3>Mañana</h3>
+          <div class="doctors-list" id="uci-morning"></div>
+        </div>
+        <div class="shift-block">
+          <h3>Tarde</h3>
+          <div class="doctors-list" id="uci-afternoon"></div>
+        </div>
+        <div class="shift-block">
+          <h3>Noche</h3>
+          <div class="doctors-list" id="uci-night"></div>
+        </div>
+      </div>
+
+      <!-- CUIDADOS ESPECIALES -->
+      <div class="schedule-column uce-col">
+        <div class="col-header"><h2>Cuidados Especiales</h2></div>
+        
+        <div class="shift-block">
+          <h3>Mañana</h3>
+          <div class="doctors-list" id="uce-morning"></div>
+        </div>
+        <div class="shift-block">
+          <h3>Tarde</h3>
+          <div class="doctors-list" id="uce-afternoon"></div>
+        </div>
+        <div class="shift-block">
+          <h3>Noche</h3>
+          <div class="doctors-list" id="uce-night"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
